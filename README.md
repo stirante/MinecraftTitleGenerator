@@ -1,3 +1,64 @@
+# TTF fork
+
+A fork of Ewan Howell's [Minecraft Title Generator](https://github.com/ewanhowell5195/MinecraftTitleGenerator) repo and plugin. It adds:
+
+- A fork of the plugin (`plugin/minecraft_title_generator_ttf.js`) that can import any TTF or OTF font and read fonts from a local folder or another repo.
+- A converter and tools in `ttf/` that turn a TTF or OTF font into a title font in this repo's format.
+
+## Credits and licences
+
+- The plugin and this repo's fonts and textures are by Ewan Howell and the contributors named in `fonts.json` and each `textures.json`. The plugin's home page is https://ewanhowell.com/plugins/minecraft-title-generator/.
+- `LICENSE.md` covers the Minecraft assets in this repo (Minecraft EULA). Neither this repo nor the plugin's source repos carry an open-source licence for the plugin code (checked 2026-09-30), so the fork is for personal use.
+- Check that the licence of a font you convert allows your use.
+
+## Install the fork plugin in Blockbench
+
+1. File > Plugins > Load Plugin from File, pick `plugin/minecraft_title_generator_ttf.js`. It installs next to the upstream plugin; both can stay installed (the fork has its own format, actions and settings).
+2. Optional: File > Preferences > Settings > General > "Minecraft Title Generator (TTF fork): font source": a local folder with fonts in this repo's format, or a URL root (for example `https://cdn.jsdelivr.net/gh/<user>/<repo>@<branch>`). Empty means the upstream repo only.
+3. Restart Blockbench. The first time the plugin reads a folder, Blockbench asks for permission to access it; choose "Always allow for this plugin".
+
+Projects made with the upstream plugin use its format and do not open in the fork's format, and the other way round.
+
+## Import a TTF or OTF font
+
+File > New > Minecraft Title (TTF fork), then Edit > Import TTF Font. Pick the file, then set:
+
+- Cap height (pixels): how many voxels tall a capital letter is. The model is always 40 units tall, so 20 gives 2 units per voxel and 40 gives 1. Chunky fonts look good at 16 to 24; stencil, thin or detailed fonts need 30 to 40.
+- Extra letter spacing, in model units.
+
+The font then shows in the font list as "<name> (TTF)". Type the text in lower case: as in the upstream plugin, an upper case `A` becomes the creeper face. Any Minecraft Ten texture works with it. Imported fonts are kept in Blockbench's local storage (the font file itself, converted again at start) and removed with Edit > Remove Imported TTF Font.
+
+## Build fonts into this repo's format
+
+```
+cd ttf
+npm install
+node build_fonts.mjs       # fonts/<id>/, fonts.json entries, thumbnails
+node preview.mjs "some text" blueprint flat smooth   # renders into ttf/out/
+node build_plugin.mjs      # plugin/minecraft_title_generator_ttf.js from the upstream plugin
+```
+
+`build_fonts.mjs` builds the fonts listed in `ttf/fonts.local.json` (not tracked): a list of `{ "id", "file" (relative to `ttf/`), "capPx", "name", "author", "description" }`. Built fonts are served to the plugin through the font source setting.
+
+## How the conversion works
+
+- Layout: converted fonts use the Minecraft Ten texture layout (`"textureSource": "minecraft-ten"` in `fonts.json`). Ten has the largest texture set, including Blueprint. The reference fonts get the letter shape from the texture's alpha, which only works for Ten's own letter shapes, so the converter builds the shape from cubes instead and samples one texture column (x 188 of face row 0) that is opaque in every Ten texture. The front face samples the face row at the voxel's height, so gradients and horizontal lines run straight across all letters; top and bottom faces sample the "ends" rows, sides one texel of the top row.
+- Glyphs: each character is drawn on a canvas, 4x supersampled, at the size where "H" is exactly the cap height, and thresholded at 50% coverage. Small overshoots of round letters are snapped to the cap line and baseline, single stray pixels are dropped and one-pixel holes filled. Letters use the capitals.
+- Geometry: the bitmap is merged into rectangles (runs along rows, grown downwards), each a 22 unit deep cube. The outline follows the reference fonts: the glyph grown by 2 units, as inverted back-wall cubes plus walls along its edges, all with the border pixel.
+- Spacing: characterSpacing is the median letter gap of the font; `shifts` hold the per-pair difference to the font's side bearings and kerning when it is 2 units or more.
+- `plugin/upstream_minecraft_title_generator.js` is the unchanged upstream plugin (1.10.4). `ttf/build_plugin.mjs` applies the fork's changes as checked replacements, each marked "TTF fork" in the output, and copies `ttf/ttf_converter.cjs` and `ttf/plugin_additions.js` into it.
+
+## Known limits
+
+- Only the Minecraft Ten layout is supported as a texture source. Texture detail that depends on the letter shape (plank seams, brick joints, per-letter bevels, most overlays) is not carried over: each texture becomes horizontal bands.
+- Diagonals and curves are voxel steps. Low cap heights lose thin strokes and stencil gaps.
+- Glyphs render slightly differently in Blockbench (Chromium) and in the node tools (skia-canvas): a few pixels on some diagonals.
+- Characters outside the plugin's fixed set (for example accented letters) are not converted. A glyph missing from the font is drawn with the system sans-serif font; an empty glyph becomes a block.
+- Converted characters have many more elements than the reference fonts (about 60 per letter), which is fine for renders but heavier to edit.
+- `scripts/compile.js` knows `textureSource`, but the thumbnails here are made by `ttf/build_fonts.mjs`; running the compile script regenerates them in its own style.
+
+# Upstream README
+
 # Minecraft Title Generator
 This plugin adds a new format that allows you to create Minecraft-styled title models that you can render in high quality.
 
