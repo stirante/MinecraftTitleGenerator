@@ -104,9 +104,11 @@ for (const font of fonts) {
   fs.mkdirSync(`../${font.type}s/${font.id}/thumbnails`, { recursive: true })
   fs.mkdirSync(`temp/${font.type}s/${font.id}/thumbnails`, { recursive: true })
 
-  const textures = fs.readdirSync(`../${font.type}s/${font.id}/textures`).map(e => ["textures", e]).concat(fs.readdirSync(`../${font.type}s/${font.id}/overlays`).map(e => ["overlays", e]))
+  // TTF fork: a font with "textureSource" uses another font's textures (and thumbnails of its own)
+  const textureDir = `../${font.type}s/${font.textureSource ?? font.id}`
+  const textures = fs.readdirSync(`${textureDir}/textures`).map(e => ["textures", e]).concat(fs.readdirSync(`${textureDir}/overlays`).map(e => ["overlays", e]))
 
-  const flat = await loadImage(`../${font.type}s/${font.id}/textures/flat.png`)
+  const flat = await loadImage(`${textureDir}/textures/flat.png`)
   const overlayBackground = new Canvas(flat.width, flat.height)
   const overlayBackgroundCtx = overlayBackground.getContext("2d")
   overlayBackgroundCtx.drawImage(flat, 0, 0)
@@ -119,7 +121,7 @@ for (const font of fonts) {
   for (const file of textures) {
     if (!file[1].endsWith(".png") || file[1] === "overlay.png") continue
 
-    const texture = await loadTexture(file[0] ? `../${font.type}s/${font.id}/${file[0]}/${file[1]}` : file[2])
+    const texture = await loadTexture(file[0] ? `${textureDir}/${file[0]}/${file[1]}` : file[2])
 
     const scaleFactor = texture.image.width / font.textureWidth
     const [scene, camera] = makeTitleScene(font, scaleFactor)

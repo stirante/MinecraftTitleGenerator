@@ -1,0 +1,9 @@
+{
+  "name": "mtg-ttf-tools",
+  "private": true,
+  "type": "module",
+  "description": "Converts TTF/OTF fonts into Minecraft Title Generator fonts and renders previews.",
+  "dependencies": {
+    "skia-canvas": "^2.0.2"
+  }
+}
