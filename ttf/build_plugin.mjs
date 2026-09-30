@@ -70,6 +70,9 @@ replace("      overlay.texture = `${fonts[font].type}s/${font}/overlays/${id}.pn
 // 6. Texture thumbnails: imported fonts have none of their own and show the source font's.
 replace(`'s/' + font + '/thumbnails/'`, `'s/' + (fonts[font].thumbnailFont ?? font) + '/thumbnails/'`, 7)
 
+// 7. TTF fonts have a real capital A: an upper case A stays a letter instead of the creeper face.
+replace('text = this.content_vue.text.replace(/A/g, "😳")', 'text = (fonts[this.content_vue.font].textureSource ? this.content_vue.text : this.content_vue.text.replace(/A/g, "😳")) // TTF fork: no creeper A\n            text = text')
+
 const out = path.join(repo, "plugin", "minecraft_title_generator_ttf.js")
 fs.writeFileSync(out, src)
 console.log(`${out}: ${src.length} bytes`)

@@ -88,7 +88,7 @@ function setFontEntry(text, entry) {
   const lines = Object.entries(entry).map(([k, v]) => {
     let value
     if (k === "shifts") value = JSON.stringify(v).replace(/,"/g, ", \"").replace(/":/g, "\": ")
-    else if (Array.isArray(v)) value = "[\n" + v.map(a => `      [${a.join(", ")}]`).join(",\n") + "\n    ]"
+    else if (Array.isArray(v) && Array.isArray(v[0])) value = "[\n" + v.map(a => `      [${a.join(", ")}]`).join(",\n") + "\n    ]"
     else value = JSON.stringify(v)
     return `    ${JSON.stringify(k)}: ${value}`
   })

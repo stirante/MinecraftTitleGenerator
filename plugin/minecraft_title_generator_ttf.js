@@ -321,10 +321,13 @@
       ctx.fillText(text, originCol * SS, 0)
       ctx.setTransform(1, 0, 0, 1, 0, 0)
       const data = ctx.getImageData(0, 0, w * SS, h * SS).data
+      const alpha = new Uint8Array(w * SS * h * SS)
+      for (let i = 0; i < alpha.length; i++) alpha[i] = data[i * 4 + 3]
+      widenHairlines(alpha, w * SS, h * SS, SS)
       const bits = new Uint8Array(w * h)
       for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
         let sum = 0
-        for (let y = 0; y < SS; y++) for (let x = 0; x < SS; x++) sum += data[((r * SS + y) * w * SS + c * SS + x) * 4 + 3]
+        for (let y = 0; y < SS; y++) for (let x = 0; x < SS; x++) sum += alpha[(r * SS + y) * w * SS + c * SS + x]
         bits[r * w + c] = sum >= 255 * SS * SS / 2 ? 1 : 0
       }
       cleanup(bits, w, h)
@@ -342,6 +345,72 @@
       }
       for (const i of drop) bits[i] = 0
       for (const i of fill) bits[i] = 1
+    }
+
+    // Hairline gaps (stencil cuts, narrow counters) thinner than a pixel vanish or turn into dotted
+    // lines at the 50% threshold. On the supersampled alpha: the gaps a closing of the ink fills
+    // (closed minus ink), kept when they are long (a concave corner's fillet is short), are widened
+    // to at least a pixel and cut out of the alpha, so they survive the downsampling as clean lines.
+    function widenHairlines(alpha, W, H, SS) {
+      const ink = new Uint8Array(W * H)
+      for (let i = 0; i < ink.length; i++) ink[i] = alpha[i] >= 128 ? 1 : 0
+      // square max / min filters, separable
+      const filter = (src, r, max) => {
+        const tmp = new Uint8Array(W * H), out = new Uint8Array(W * H)
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+          let v = max ? 0 : 1
+          for (let k = -r; k <= r; k++) {
+            const xx = x + k
+            const s = xx < 0 || xx >= W ? 0 : src[y * W + xx]
+            v = max ? v | s : v & s
+          }
+          tmp[y * W + x] = v
+        }
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+          let v = max ? 0 : 1
+          for (let k = -r; k <= r; k++) {
+            const yy = y + k
+            const s = yy < 0 || yy >= H ? 0 : tmp[yy * W + x]
+            v = max ? v | s : v & s
+          }
+          out[y * W + x] = v
+        }
+        return out
+      }
+      const R = SS - 1
+      const closed = filter(filter(ink, R, true), R, false)
+      const gap = new Uint8Array(W * H)
+      for (let i = 0; i < gap.length; i++) gap[i] = closed[i] && !ink[i] ? 1 : 0
+      // connected gap pieces (8-neighbour); only long ones are hairlines
+      const seen = new Uint8Array(W * H), keep = new Uint8Array(W * H)
+      const minLen = SS * 1.5
+      for (let s = 0; s < gap.length; s++) {
+        if (!gap[s] || seen[s]) continue
+        const stack = [s], piece = []
+        seen[s] = 1
+        let x0 = W, x1 = 0, y0 = H, y1 = 0
+        while (stack.length) {
+          const i = stack.pop()
+          piece.push(i)
+          const x = i % W, y = (i - x) / W
+          if (x < x0) x0 = x
+          if (x > x1) x1 = x
+          if (y < y0) y0 = y
+          if (y > y1) y1 = y
+          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+            const xx = x + dx, yy = y + dy
+            if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue
+            const j = yy * W + xx
+            if (gap[j] && !seen[j]) {
+              seen[j] = 1
+              stack.push(j)
+            }
+          }
+        }
+        if (Math.max(x1 - x0, y1 - y0) + 1 >= minLen) for (const i of piece) keep[i] = 1
+      }
+      const wide = filter(keep, SS >> 1, true)
+      for (let i = 0; i < wide.length; i++) if (wide[i]) alpha[i] = 0
     }
 
     // Crops to the ink. `topK` is the height of the top row above the baseline in pixels (the row
@@ -558,7 +627,9 @@
       const characterSpacing = Math.max(0, Math.round(median + tracking - outlineGap))
       const shifts = {}
       for (const [pair, gap] of Object.entries(gaps)) {
-        const shift = Math.round(outlineGap + characterSpacing - gap - tracking)
+        // Kerning never pulls two letters closer than one border between their bodies, so the outline
+        // always separates them (tight condensed fonts otherwise fuse into one block).
+        const shift = Math.min(characterSpacing + b * u, Math.round(outlineGap + characterSpacing - gap - tracking))
         // differences under 2 units (half a pixel to a pixel) are not worth a shift entry
         if (Math.abs(shift) >= (opts.minShift ?? 2)) shifts[pair] = shift
       }
@@ -578,6 +649,8 @@
         characterSpacing,
         spaceWidth,
         preview: opts.preview ?? "abc",
+        // the text dialog's preview; upstream's default has the creeper face
+        example: ["example", "text"],
         shifts
       }
       for (const k of Object.keys(entry)) if (entry[k] === undefined) delete entry[k]
@@ -3942,7 +4015,8 @@
         onConfirm() {
           let text
           if (fonts[this.content_vue.font].type === "font") {
-            text = this.content_vue.text.replace(/A/g, "😳").replace(/(\s|^)'/g, "$1😩").replace(/(\s|^)"/g, "$1😩😩").replace(/"/g, "''").toLowerCase().trim()
+            text = (fonts[this.content_vue.font].textureSource ? this.content_vue.text : this.content_vue.text.replace(/A/g, "😳")) // TTF fork: no creeper A
+            text = text.replace(/(\s|^)'/g, "$1😩").replace(/(\s|^)"/g, "$1😩😩").replace(/"/g, "''").toLowerCase().trim()
             if (!text) {
               this.content_vue.tab = 0
               Blockbench.showQuickMessage("Please provide some text")

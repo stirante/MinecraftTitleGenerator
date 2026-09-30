@@ -26,7 +26,7 @@ File > New > Minecraft Title (TTF fork), then Edit > Import TTF Font. Pick the f
 - Cap height (pixels): how many voxels tall a capital letter is. The model is always 40 units tall, so 20 gives 2 units per voxel and 40 gives 1. Chunky fonts look good at 16 to 24; stencil, thin or detailed fonts need 30 to 40.
 - Extra letter spacing, in model units.
 
-The font then shows in the font list as "<name> (TTF)". Type the text in lower case: as in the upstream plugin, an upper case `A` becomes the creeper face. Any Minecraft Ten texture works with it. Imported fonts are kept in Blockbench's local storage (the font file itself, converted again at start) and removed with Edit > Remove Imported TTF Font.
+The font then shows in the font list as "<name> (TTF)". Letters are capitals whatever the case you type; unlike the upstream fonts, an upper case `A` stays a letter (no creeper face). Any Minecraft Ten texture works with it. Imported fonts are kept in Blockbench's local storage (the font file itself, converted again at start) and removed with Edit > Remove Imported TTF Font.
 
 ## Build fonts into this repo's format
 
@@ -44,8 +44,9 @@ node build_plugin.mjs      # plugin/minecraft_title_generator_ttf.js from the up
 
 - Layout: converted fonts use the Minecraft Ten texture layout (`"textureSource": "minecraft-ten"` in `fonts.json`). Ten has the largest texture set, including Blueprint. The reference fonts get the letter shape from the texture's alpha, which only works for Ten's own letter shapes, so the converter builds the shape from cubes instead and samples one texture column (x 188 of face row 0) that is opaque in every Ten texture. The front face samples the face row at the voxel's height, so gradients and horizontal lines run straight across all letters; top and bottom faces sample the "ends" rows, sides one texel of the top row.
 - Glyphs: each character is drawn on a canvas, 4x supersampled, at the size where "H" is exactly the cap height, and thresholded at 50% coverage. Small overshoots of round letters are snapped to the cap line and baseline, single stray pixels are dropped and one-pixel holes filled. Letters use the capitals.
+- Hairlines: gaps thinner than a pixel (stencil cuts, narrow counters) would vanish or break into dots at the threshold. On the supersampled image, the long gaps a closing of the ink fills are widened to about a pixel first, so they come out as clean lines.
 - Geometry: the bitmap is merged into rectangles (runs along rows, grown downwards), each a 22 unit deep cube. The outline follows the reference fonts: the glyph grown by 2 units, as inverted back-wall cubes plus walls along its edges, all with the border pixel.
-- Spacing: characterSpacing is the median letter gap of the font; `shifts` hold the per-pair difference to the font's side bearings and kerning when it is 2 units or more.
+- Spacing: characterSpacing is the median letter gap of the font; `shifts` hold the per-pair difference to the font's side bearings and kerning when it is 2 units or more. A shift never brings two letters closer than one border between their bodies, measured row by row, so tight fonts do not fuse.
 - `plugin/upstream_minecraft_title_generator.js` is the unchanged upstream plugin (1.10.4). `ttf/build_plugin.mjs` applies the fork's changes as checked replacements, each marked "TTF fork" in the output, and copies `ttf/ttf_converter.cjs` and `ttf/plugin_additions.js` into it.
 
 ## Known limits
